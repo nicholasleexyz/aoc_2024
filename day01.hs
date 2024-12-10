@@ -1,30 +1,31 @@
-import Control.Monad
-import Control.Monad.Cont (cont)
-import Data.List (sort)
-import System.IO
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+module Main where
 
+import System.Environment
+import Data.List (transpose, sort)
+
+main :: IO ()
 main = do
-  contents <- readFile "input.txt"
-  let vals = map readInt . words $ contents
-  let evens = sort . evenElems $ vals
-  let odds = sort . oddElems $ vals
-  --   first problem
-  --   let combined = sum [abs . pairDiff $ x | x <- zip evens odds]
-  --   second problem
-  let combined = sum [countOccurrences x odds * x | x <- evens]
-  print combined
+  [arg] <- getArgs
+  input <- fetchInput arg
+  print $ solve1 input
+  print $ solve2 input
 
-readInt :: String -> Int
-readInt = read
+fetchInput :: FilePath -> IO String
+fetchInput file = do
+  readFile file
 
-evenElems :: [a] -> [a]
-evenElems xs = [x | (x, i) <- zip xs [0 ..], even i]
+solve1 :: String -> Int
+solve1 =
+  sum .
+  map (abs . foldr ((-) . read) 0) .
+  transpose .
+  map sort .
+  transpose .
+  map words . lines
 
-oddElems :: [a] -> [a]
-oddElems xs = [x | (x, i) <- zip xs [0 ..], odd i]
-
-pairDiff :: (Num a) => (a, a) -> a
-pairDiff (x, y) = x - y
-
-countOccurrences :: (Eq a) => a -> [a] -> Int
-countOccurrences x xs = length (filter (== x) xs)
+solve2 :: String -> Int
+solve2 =
+  (\[left, right] -> sum $ map (\a -> length (filter (== a) right) * a) left) .
+  transpose .
+  map (map read . words) . lines
