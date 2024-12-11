@@ -1,0 +1,114 @@
+module Main where
+
+import Control.Applicative
+import Data.Char
+
+newtype MulValue
+  = MulArgs (Int, Int)
+  deriving (Show, Eq)
+
+newtype Parser a = Parser
+  { runParser :: String -> Maybe (String, a)
+  }
+
+instance Functor Parser where
+  fmap f (Parser p) = Parser $ \input -> do
+    (input', x) <- p input
+    Just (input', f x)
+
+instance Applicative Parser where
+  pure x = Parser $ \input -> Just (input, x)
+  (Parser p1) <*> (Parser p2) = Parser $ \input -> do
+    (input', f) <- p1 input
+    (input'', a) <- p2 input'
+    Just (input'', f a)
+
+instance Alternative Parser where
+  empty = Parser $ const Nothing
+  (Parser p1) <|> (Parser p2) = Parser $ \input -> p1 input <|> p2 input
+
+instance Monad Parser where
+  return = pure
+  (Parser p) >>= f = Parser $ \input -> do
+    (input', x) <- p input
+    runParser (f x) input'
+testParser :: Parser a -> String -> Maybe a
+testParser parser input = snd <$> runParser parser input
+
+main :: IO ()
+main = do
+  input <- readFile "input.txt"
+  case testParser mulManyP input of
+    Just results -> do
+      let products = map multiplyMulArgs results
+      print $ sum products
+    Nothing -> putStrLn "No valid mul(x,y) patterns found."
+
+-- Multiplies the values in a `MulArgs` constructor
+multiplyMulArgs :: MulValue -> Int
+multiplyMulArgs (MulArgs (x, y)) = x * y
+
+digitP :: Parser Int
+digitP = read . (:[]) <$> Parser f
+  where
+    f (x:xs)
+      | isDigit x = Just (xs, x)
+      | otherwise = Nothing
+    f [] = Nothing
+
+intP :: Parser Int
+intP = fmap read $ some $ Parser f
+  where
+    f (x:xs)
+      | isDigit x = Just (xs, x)
+      | otherwise = Nothing
+    f [] = Nothing
+
+mulP :: Parser MulValue
+mulP = do
+  _ <- stringP "mul"
+  _ <- charP '('
+  x <- intP
+  _ <- charP ','
+  y <- intP
+  _ <- charP ')'
+  return $ MulArgs (x, y)
+
+charP :: Char -> Parser Char
+charP x = Parser f
+  where
+    f (y : ys)
+      | y == x = Just (ys, x)
+      | otherwise = Nothing
+    f [] = Nothing
+
+stringP :: String -> Parser String
+stringP = traverse charP
+
+-- Parses any single character
+anyCharP :: Parser Char
+anyCharP = Parser f
+  where
+    f (x:xs) = Just (xs, x)
+    f [] = Nothing
+
+-- Skips characters until a valid `mul(x,y)` pattern is found
+skipUntilValidMul :: Parser ()
+skipUntilValidMul = Parser $ \input ->
+  case findValidMul input of
+    Just rest -> Just (rest, ())
+    Nothing   -> Nothing
+  where
+    -- Helper to locate the next valid `mul(x,y)` pattern
+    findValidMul :: String -> Maybe String
+    findValidMul [] = Nothing
+    findValidMul str@(_:cs) =
+      case runParser mulP str of
+        Just (_, _) -> Just str -- Found a valid pattern; stop skipping
+        Nothing        -> findValidMul cs -- Keep skipping
+
+-- Parses and accumulates all valid `mul(x,y)` patterns into a list
+mulManyP :: Parser [MulValue]
+mulManyP = many $ do
+  skipUntilValidMul -- Skip to the next valid `mul(x,y)`
+  mulP             -- Parse the valid `mul(x,y)` pattern
