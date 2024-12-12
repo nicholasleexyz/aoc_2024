@@ -1,18 +1,13 @@
 import Data.List
-
-main :: IO()
-main = do
-  input <- readFile "input.txt"
-  print $ sum $ map countOccurences $ allDirections $ lines input
+import System.Environment
 
 type Matrix a = [[a]]
 type Line a = [a]
 
 diagonals :: Matrix a -> [Line a]
-diagonals orig = concat [
-      transpose $ zipWith drop [0 ..] orig
-    , transpose $ map reverse $ zipWith take [0 ..] orig
-    ]
+diagonals orig =
+  transpose (zipWith drop [0 ..] orig) ++
+  transpose (map reverse $ zipWith take [0 ..] orig)
 
 allDirections :: Matrix a -> [Line a]
 allDirections orig = concat [
@@ -22,14 +17,18 @@ allDirections orig = concat [
     , diagonals (map reverse orig)     -- diagonals (sloping up)
   ]
 
-countOccurences :: String -> Int
-countOccurences str = countOccurences' str 0
+-- count needle haystack
+count :: Eq a => [a] -> [a] -> Int
+count = (length .) . (. tails) . filter . isPrefixOf
 
-countOccurences' :: String -> Int -> Int
-countOccurences' [] acc = acc
-countOccurences' str acc
-  | xmasCheck (take 4 str) = countOccurences' (drop 1 str) (acc + 1)
-  | otherwise = countOccurences' (drop 1 str) acc
+allDirs :: Matrix a -> [Line a]
+allDirs input = allDirections input ++ (map reverse . allDirections) input
 
-xmasCheck :: String -> Bool
-xmasCheck str = (str == "XMAS") || (str == "SAMX")
+part1 :: Matrix Char -> Int
+part1 = sum . map (count "XMAS") . allDirs
+
+main :: IO()
+main = do
+  [inputFile] <- getArgs
+  input <- lines <$> readFile inputFile
+  putStrLn $ "#XMAS: " ++ show (part1 input)
